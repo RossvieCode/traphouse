@@ -143,13 +143,13 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-80 flex items-end justify-center sm:items-center">
-      <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-black/40" />
+      <div aria-hidden="true" onClick={onClose} className="anim-fade absolute inset-0 bg-black/40" />
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative max-h-[92dvh] w-full overflow-y-auto border-t border-fg bg-white px-4 pt-3 pb-[calc(20px+env(safe-area-inset-bottom,0px))] sm:max-w-md sm:border"
+        className="anim-sheet relative max-h-[92dvh] w-full overflow-y-auto border-t border-fg bg-white px-4 pt-3 pb-[calc(20px+env(safe-area-inset-bottom,0px))] sm:max-w-md sm:border"
       >
         <div className="-mr-2 mb-2 flex items-center justify-between gap-2">
           <h2 className="display text-[22px]">{title}</h2>

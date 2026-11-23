@@ -11,12 +11,19 @@ import { errorText } from "@/lib/supabase";
 
 const FILTERS = {
   all: "All",
-  low: "Low (2 or less)",
+  low: "Low",
   out: "Sold out",
   in: "In stock",
-  hidden: "Hidden products",
+  hidden: "Hidden",
 } as const;
 type Filter = keyof typeof FILTERS;
+
+const matches = (r: InventoryRow, f: Filter) =>
+  f === "all" ||
+  (f === "low" && r.available <= 2 && r.product_active) ||
+  (f === "out" && r.available <= 0) ||
+  (f === "in" && r.available > 0) ||
+  (f === "hidden" && !r.product_active);
 
 /** Product column + four number columns, shared by the heads and every row. */
 const COLS = "grid grid-cols-[minmax(0,1fr)_repeat(4,2.75rem)] gap-1";
@@ -43,17 +50,12 @@ export default function InventoryPage() {
     return [...CATEGORY_ORDER.filter((c) => present.includes(c)), ...present.filter((c) => !CATEGORY_ORDER.includes(c)).sort()];
   }, [rows]);
 
-  const shown = useMemo(() => {
+  /* rows matching the search + category, before the stock filter (so each chip can show its count) */
+  const searched = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (rows ?? []).filter((r) => {
-      if (category && r.category !== category) return false;
-      if (filter === "low" && !(r.available <= 2 && r.product_active)) return false;
-      if (filter === "out" && r.available > 0) return false;
-      if (filter === "in" && r.available <= 0) return false;
-      if (filter === "hidden" && r.product_active) return false;
-      return !s || `${r.name} ${r.category} ${r.size} ${r.colour}`.toLowerCase().includes(s);
-    });
-  }, [rows, q, category, filter]);
+    return (rows ?? []).filter((r) => (!category || r.category === category) && (!s || `${r.name} ${r.category} ${r.size} ${r.colour}`.toLowerCase().includes(s)));
+  }, [rows, q, category]);
+  const shown = useMemo(() => searched.filter((r) => matches(r, filter)), [searched, filter]);
 
   const totals = shown.reduce((t, r) => ({ on_hand: t.on_hand + r.on_hand, available: t.available + r.available }), { on_hand: 0, available: 0 });
 
@@ -67,20 +69,33 @@ export default function InventoryPage() {
 
       <div className="grid gap-2">
         <input type="search" placeholder="Search name, size, colour" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search" aria-label="Search" className={input} />
-        <div className="grid grid-cols-2 gap-2">
-          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category" className={input}>
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-          <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)} aria-label="Stock" className={input}>
-            {Object.entries(FILTERS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
+        <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category" className={input}>
+          <option value="">All categories</option>
+          {categories.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+        <div role="group" aria-label="Show" className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5">
+          {(Object.keys(FILTERS) as Filter[]).map((f) => {
+            const on = filter === f;
+            const n = rows ? searched.filter((r) => matches(r, f)).length : null;
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                aria-pressed={on}
+                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 border px-3.5 text-[12px] font-bold tracking-[0.06em] whitespace-nowrap uppercase transition-colors duration-200 ${
+                  on ? "border-fg bg-fg text-white" : "border-fg hover:bg-soft"
+                }`}
+              >
+                {FILTERS[f]}
+                {n != null && (
+                  <span className={`tabular-nums ${on ? "text-white/70" : f === "out" && n ? "text-alert" : "text-muted"}`}>{n}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -200,8 +215,15 @@ function RowSheet({ row, onClose, onChanged }: { row: InventoryRow | null; onClo
               <span className="text-right text-[13px] text-muted">
                 New total
                 <br />
-                <strong className="text-[17px] text-fg tabular-nums">{current.on_hand + qty}</strong>
+                <strong key={qty} className="anim-fade text-[17px] text-fg tabular-nums">{current.on_hand + qty}</strong>
               </span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Quick amounts">
+              {[1, 5, 10].map((n) => (
+                <button key={n} type="button" onClick={() => setQty(n)} aria-pressed={qty === n} className={`min-h-11 border text-[14px] font-bold tabular-nums transition-colors ${qty === n ? "border-fg bg-fg text-white" : "border-line hover:border-fg"}`}>
+                  {n}
+                </button>
+              ))}
             </div>
             <Field label="Note (optional)">
               <input name="note" maxLength={200} placeholder="e.g. new delivery" className={input} />

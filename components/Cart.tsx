@@ -21,8 +21,9 @@ type Checkout =
   | { kind: "done"; code: string; url: string };
 
 const BTN = "flex min-h-[52px] w-full items-center justify-center gap-2.5 px-5 text-sm font-bold tracking-widest uppercase";
-const BTN_DARK = `${BTN} bg-fg text-white hover:bg-[#2a2a2a] disabled:bg-line disabled:text-muted`;
-const BTN_LINE = `${BTN} border border-fg hover:bg-soft`;
+const BTN_DARK = `${BTN} bg-fg text-white transition-[background-color,scale] hover:bg-fg-hover active:scale-[0.99] disabled:bg-line disabled:text-muted`;
+const BTN_LINE = `${BTN} border border-fg transition-colors hover:bg-soft`;
+const FIELD = "min-h-12 border bg-white px-3.5 text-base outline-none focus:border-2";
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const digits = (s: string) => s.replace(/\D/g, "");
@@ -40,6 +41,8 @@ export function CartDrawer() {
   const open = panel === "cart";
   const ref = useDialog(open);
   const [checkout, setCheckout] = useState<Checkout>({ kind: "idle" });
+  /** Problems with the name / phone, shown under each field. */
+  const [fieldErr, setFieldErr] = useState<{ name?: string; phone?: string }>({});
 
   // A finished checkout is shown until the cart is closed
   useEffect(() => {
@@ -59,8 +62,17 @@ export function CartDrawer() {
     e.preventDefault();
     const name = customer.name.trim();
     const phone = customer.phone.trim();
-    if (!name) return setCheckout({ kind: "error", message: "Please enter your name." });
-    if (digits(phone).length < 9) return setCheckout({ kind: "error", message: "Please enter your phone number." });
+    const errs = {
+      name: name ? undefined : "Please enter your name.",
+      phone: digits(phone).length >= 9 ? undefined : phone ? "This number looks too short, like 0788 123 456." : "Please enter your WhatsApp number.",
+    };
+    setFieldErr(errs);
+    if (errs.name || errs.phone) {
+      const field = e.currentTarget.querySelector<HTMLInputElement>(`[name="${errs.name ? "name" : "phone"}"]`);
+      field?.scrollIntoView({ block: "center", behavior: "smooth" });
+      field?.focus({ preventScroll: true });
+      return;
+    }
     if (short.length)
       return setCheckout({
         kind: "error",
@@ -93,6 +105,7 @@ export function CartDrawer() {
   const busy = checkout.kind === "sending";
   const edit = (c: typeof customer) => {
     setCustomer(c);
+    setFieldErr((f) => ({ name: c.name !== customer.name ? undefined : f.name, phone: c.phone !== customer.phone ? undefined : f.phone }));
     if (checkout.kind === "error") setCheckout({ kind: "idle" });
   };
 
@@ -118,12 +131,31 @@ export function CartDrawer() {
         </div>
 
         {checkout.kind === "done" ? (
-          <div className="flex-1 overflow-y-auto pt-6" role="status" data-testid="order-done">
-            <p className="label text-muted">Order</p>
+          <div className="anim-rise flex-1 overflow-y-auto pt-6" role="status" data-testid="order-done">
+            <svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true" className="text-fg">
+              <circle cx="28" cy="28" r="26" stroke="currentColor" strokeWidth="2" className="anim-draw" style={{ "--len": 164 } as React.CSSProperties} />
+              <path d="M17 29l7.5 7.5L40 21" stroke="currentColor" strokeWidth="3" strokeLinecap="square" className="anim-draw" style={{ "--len": 40, animationDelay: "0.45s" } as React.CSSProperties} />
+            </svg>
+            <p className="label mt-5 text-muted">Order reserved</p>
             <p className="display mt-1 text-[40px]">{checkout.code}</p>
             <p className="mt-3 text-[15px]">
-              Your items are held for you for <strong>24 hours</strong>. Send the order on WhatsApp so we can confirm it and arrange delivery or pick-up.
+              Your items are held for you for <strong>24 hours</strong>.
             </p>
+            <ol className="mt-5 grid gap-3 border-y border-line py-4 text-[14px]">
+              {[
+                ["Send the order on WhatsApp", "It opens with your order written out."],
+                ["We confirm it with you", "On WhatsApp, while your items are held."],
+                ["Delivery or pick-up", "Delivery in Kigali, or pick-up at the shop in Remera Kisimenti."],
+              ].map(([t, d], i) => (
+                <li key={t} className="grid grid-cols-[24px_1fr] gap-2.5">
+                  <span className={`grid size-6 place-items-center rounded-full text-[12px] font-bold ${i === 0 ? "bg-fg text-white" : "border border-fg"}`}>{i + 1}</span>
+                  <span>
+                    <span className="block font-semibold">{t}</span>
+                    <span className="block text-muted">{d}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
             <a href={checkout.url} target="_blank" rel="noopener" className={`${BTN_DARK} mt-6`} data-testid="order-whatsapp">
               <WhatsAppIcon /> Send on WhatsApp
             </a>
@@ -215,8 +247,15 @@ export function CartDrawer() {
                         onChange={(e) => edit({ ...customer, name: e.target.value })}
                         maxLength={80}
                         required
-                        className="min-h-12 border border-fg bg-white px-3.5 text-base outline-none focus:border-2"
+                        aria-invalid={!!fieldErr.name || undefined}
+                        aria-describedby={fieldErr.name ? "err-name" : undefined}
+                        className={`${FIELD} ${fieldErr.name ? "border-2 border-alert" : "border-fg"}`}
                       />
+                      {fieldErr.name && (
+                        <span id="err-name" className="anim-fade text-[13px] font-semibold text-alert">
+                          {fieldErr.name}
+                        </span>
+                      )}
                     </label>
                     <label className="grid gap-1">
                       <span className="text-[13px] font-semibold">Phone (WhatsApp)</span>
@@ -230,8 +269,15 @@ export function CartDrawer() {
                         onChange={(e) => edit({ ...customer, phone: e.target.value })}
                         maxLength={20}
                         required
-                        className="min-h-12 border border-fg bg-white px-3.5 text-base outline-none focus:border-2"
+                        aria-invalid={!!fieldErr.phone || undefined}
+                        aria-describedby={fieldErr.phone ? "err-phone" : undefined}
+                        className={`${FIELD} ${fieldErr.phone ? "border-2 border-alert" : "border-fg"}`}
                       />
+                      {fieldErr.phone && (
+                        <span id="err-phone" className="anim-fade text-[13px] font-semibold text-alert">
+                          {fieldErr.phone}
+                        </span>
+                      )}
                     </label>
                   </fieldset>
                 </>
@@ -263,7 +309,15 @@ export function CartDrawer() {
                 )}
                 <p className="mt-1 mb-2 text-xs text-muted">We hold your items for 24 hours and open WhatsApp with your order ready to send.</p>
                 <button type="submit" disabled={busy} className={BTN_DARK} data-testid="order-submit">
-                  <WhatsAppIcon /> {busy ? "Reserving…" : "Order on WhatsApp"}
+                  {busy ? (
+                    <>
+                      <span aria-hidden="true" className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent" /> Reserving your items…
+                    </>
+                  ) : (
+                    <>
+                      <WhatsAppIcon /> Order on WhatsApp
+                    </>
+                  )}
                 </button>
               </div>
             )}

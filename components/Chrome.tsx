@@ -39,7 +39,7 @@ export function Header() {
       >
         <BagIcon />
         {count > 0 && (
-          <span aria-hidden="true" className="absolute top-0.5 right-0 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-fg px-1.5 text-[11px] font-bold text-white">
+          <span key={count} aria-hidden="true" className="anim-pop absolute top-0.5 right-0 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-fg px-1.5 text-[11px] font-bold text-white">
             {count}
           </span>
         )}
@@ -88,9 +88,14 @@ export function Contact({ center }: { center?: boolean }) {
 
 export function MenuOverlay() {
   const { panel, close } = useUI();
-  const { categories } = useProducts();
+  const { categories, products } = useProducts();
   const router = useRouter();
   const open = panel === "menu";
+  const links = [
+    { label: "All", href: "/" },
+    ...(products.some((p) => p.isNew) ? [{ label: "New in", href: "/?category=new" }] : []),
+    ...categories.map((c) => ({ label: c, href: `/?category=${slugify(c)}` })),
+  ];
   const ref = useDialog(open);
 
   const onSearch = (e: FormEvent<HTMLFormElement>) => {
@@ -126,15 +131,15 @@ export function MenuOverlay() {
         </button>
       </form>
       <nav aria-label="Categories" className="my-6 flex flex-col">
-        {["All", ...categories].map((c, i) => (
+        {links.map((l, i) => (
           <Link
-            key={c}
-            href={c === "All" ? "/" : `/?category=${slugify(c)}`}
+            key={l.href}
+            href={l.href}
             onClick={close}
             className="menu-link display py-1.5 text-[34px] hover:underline hover:decoration-2 hover:underline-offset-4"
             style={{ "--i": i } as React.CSSProperties}
           >
-            {c}
+            {l.label}
           </Link>
         ))}
       </nav>

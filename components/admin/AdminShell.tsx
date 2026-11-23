@@ -150,7 +150,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </a>
           </div>
         </header>
-        <main className="mx-auto max-w-[760px] px-4">{children}</main>
+        <main key={path} className="anim-rise mx-auto max-w-[760px] px-4">
+          {children}
+        </main>
         <nav
           aria-label="Admin"
           className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-fg bg-white pb-[env(safe-area-inset-bottom,0px)]"

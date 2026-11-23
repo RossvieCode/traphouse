@@ -1,5 +1,6 @@
 import { CartDrawer } from "./Cart";
 import { Footer, Header, MenuOverlay, Toast } from "./Chrome";
+import Preloader from "./Preloader";
 import { StoreProvider } from "./Store";
 
 /** Everything around a shop page: header, menu, cart, footer. Not used by /admin. */
@@ -10,6 +11,7 @@ export default function ShopFrame({ children }: { children: React.ReactNode }) {
         Skip to products
       </a>
       <StoreProvider>
+        <Preloader />
         <Header />
         <MenuOverlay />
         <main id="main" tabIndex={-1} className="min-h-[60vh] outline-none">

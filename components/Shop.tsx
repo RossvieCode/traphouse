@@ -2,26 +2,81 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { priceText, sizeNames, slugify, type Product } from "@/lib/products";
 import { ChevronIcon, SearchIcon } from "./icons";
 import Photo from "./Photo";
 import { useProducts } from "./Store";
 
-export function FilterChips({ active }: { active?: string }) {
+/** `?category=new`: products added in the last NEW_DAYS days. */
+export const NEW_FILTER = "new";
+
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/**
+ * Category chips. A black pill slides to the chosen chip, and the row scrolls
+ * so the chosen chip is in view (it's off-screen on phones for later categories).
+ */
+export function FilterChips({ active, showNew }: { active?: string; showNew?: boolean }) {
   const { categories } = useProducts();
+  const nav = useRef<HTMLElement>(null);
+  const [pill, setPill] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const moved = useRef(false);
+  const chips: { label: string; href: string; key: string }[] = [
+    { label: "All", href: "/", key: "All" },
+    ...(showNew ? [{ label: "New", href: `/?category=${NEW_FILTER}`, key: NEW_FILTER }] : []),
+    ...categories.map((c) => ({ label: c, href: `/?category=${slugify(c)}`, key: c })),
+  ];
+
+  useIsoLayoutEffect(() => {
+    const el = nav.current;
+    if (!el) return;
+    const place = () => {
+      const chip = el.querySelector<HTMLElement>("[aria-current='page']");
+      setPill(chip ? { x: chip.offsetLeft, y: chip.offsetTop, w: chip.offsetWidth, h: chip.offsetHeight } : null);
+    };
+    place();
+    const chip = el.querySelector<HTMLElement>("[aria-current='page']");
+    if (chip && el.scrollWidth > el.clientWidth) {
+      const smooth = moved.current && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollTo({ left: chip.offsetLeft - (el.clientWidth - chip.offsetWidth) / 2, behavior: smooth ? "smooth" : "auto" });
+    }
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [active, categories.length, showNew]);
+  // the first placement jumps; later ones glide
+  useEffect(() => {
+    if (pill) moved.current = true;
+  }, [pill]);
+
   return (
-    <nav aria-label="Filter by category" className="no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pt-0.5 pb-1 sm:-mx-6 sm:px-6 lg:flex-wrap lg:overflow-visible">
-      {["All", ...categories].map((c) => {
-        const on = c === active;
+    <nav
+      ref={nav}
+      aria-label="Filter by category"
+      className="no-scrollbar relative -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pt-0.5 pb-1 sm:-mx-6 sm:px-6 lg:flex-wrap lg:overflow-visible"
+    >
+      {pill && (
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute top-0 left-0 rounded-full bg-fg ${moved.current ? "transition-[transform,width,height] duration-500 ease-out-expo" : ""}`}
+          style={{ transform: `translate(${pill.x}px, ${pill.y}px)`, width: pill.w, height: pill.h }}
+        />
+      )}
+      {chips.map((c) => {
+        const on = c.key === active;
         return (
           <Link
-            key={c}
-            href={c === "All" ? "/" : `/?category=${slugify(c)}`}
+            key={c.key}
+            href={c.href}
+            scroll={false}
             aria-current={on ? "page" : undefined}
-            className={`shrink-0 rounded-full border border-fg px-3.5 py-2 text-xs font-semibold tracking-[0.06em] whitespace-nowrap uppercase transition-colors ${on ? "bg-fg text-white" : "hover:bg-soft"}`}
+            className={`relative shrink-0 rounded-full border border-fg px-3.5 py-2 text-xs font-semibold tracking-[0.06em] whitespace-nowrap uppercase transition-[color,background-color,scale] duration-300 active:scale-95 ${
+              on ? (pill ? "text-white" : "bg-fg text-white") : "hover:bg-soft"
+            }`}
           >
-            {c}
+            {c.key === NEW_FILTER && <span aria-hidden="true" className={`mr-1.5 inline-block size-1.5 -translate-y-px rounded-full align-middle ${on ? "bg-white" : "bg-fg"}`} />}
+            {c.label}
           </Link>
         );
       })}
@@ -199,16 +254,18 @@ export default function ShopView() {
   const catSlug = params.get("category") ?? "";
   const q = (params.get("q") ?? "").trim();
 
-  const category = categories.find((c) => slugify(c) === catSlug);
-  let items = category ? products.filter((p) => p.category === category) : products;
+  const hasNew = products.some((p) => p.isNew);
+  const newOnly = catSlug === NEW_FILTER;
+  const category = newOnly ? undefined : categories.find((c) => slugify(c) === catSlug);
+  let items = newOnly ? products.filter((p) => p.isNew) : category ? products.filter((p) => p.category === category) : products;
   if (q) {
     const s = q.toLowerCase();
     items = items.filter((p) => [p.name, p.category, ...sizeNames(p), ...p.colors].join(" ").toLowerCase().includes(s));
   }
 
   useEffect(() => {
-    document.title = (category ? category + " — " : q ? "Search — " : "") + "Trap House Society";
-  }, [category, q]);
+    document.title = (newOnly ? "New in — " : category ? category + " — " : q ? "Search — " : "") + "Trap House Society";
+  }, [category, q, newOnly]);
 
   const onSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -216,7 +273,8 @@ export default function ShopView() {
     router.push(v ? `/?q=${encodeURIComponent(v)}` : "/");
   };
 
-  const title = q ? `Results for “${q}”` : category ?? "Shop all";
+  const title = q ? `Results for “${q}”` : newOnly ? "New in" : category ?? "Shop all";
+  const active = q ? undefined : newOnly ? NEW_FILTER : category ?? (catSlug ? undefined : "All");
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 pb-14 sm:px-6">
@@ -233,18 +291,31 @@ export default function ShopView() {
       )}
       <h1 className="display mt-6 mb-3.5 text-[30px] sm:text-[40px]">
         {title}{" "}
-        {status === "ready" && <span className="align-top text-sm font-medium tracking-normal text-muted normal-case [font-stretch:100%]">{items.length}</span>}
+        {status === "ready" && (
+          <span key={items.length} className="anim-fade align-top text-sm font-medium tracking-normal text-muted normal-case [font-stretch:100%]">
+            {items.length}
+          </span>
+        )}
       </h1>
       {status === "loading" ? (
         <GridSkeleton />
       ) : (
         <>
-          <FilterChips active={q ? undefined : category ?? (catSlug ? undefined : "All")} />
+          <FilterChips active={active} showNew={hasNew} />
           {items.length ? (
-            <ProductGrid products={items} />
+            // a new key per filter: the cards fade up again, so the change reads as a change
+            <ProductGrid key={`${catSlug}|${q}`} products={items} />
           ) : (
-            <div className="py-14 text-center">
-              <p className="text-muted">{products.length ? (q ? `No products match “${q}”.` : "Nothing here yet.") : "Products are unavailable right now. Please refresh in a moment."}</p>
+            <div className="anim-rise py-14 text-center">
+              <p className="text-muted">
+                {products.length
+                  ? q
+                    ? `No products match “${q}”.`
+                    : newOnly
+                      ? "Nothing new right now — check back soon."
+                      : "Nothing here yet."
+                  : "Products are unavailable right now. Please refresh in a moment."}
+              </p>
               <Link href="/" className="mt-4 inline-flex min-h-12 items-center border border-fg px-5 text-sm font-bold tracking-widest uppercase hover:bg-soft">
                 Shop all
               </Link>

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import PhotoPicker from "@/components/admin/PhotoPicker";
-import { ErrorBox, Field, Loading, PageHead, Stepper, btn, input } from "@/components/admin/ui";
+import { ErrorBox, Field, Loading, PageHead, Sheet, Stepper, btn, input } from "@/components/admin/ui";
 import { CloseIcon } from "@/components/icons";
 import { call, type InventoryRow } from "@/lib/admin-data";
 import { CATEGORY_ORDER, asset } from "@/lib/config";
@@ -53,6 +53,54 @@ const emptyForm = (): Form => ({
   sizes: [{ key: key(), size: "", colour: "", on_hand: 1, reserved: 0, sold: 0 }],
 });
 
+/** Confirms, deletes in the database, then clears the product's uploaded photos from Storage. */
+function DeleteSheet({ open, onClose, id, name, stock, onDeleted }: { open: boolean; onClose: () => void; id: string; name: string; stock: number; onDeleted: () => void }) {
+  const { toast } = useAdmin();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const remove = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await call<{ result: "removed" | "archived"; photos: string[] }>("delete_product", { p_id: id });
+      // photos uploaded in the admin live in a folder; root files are the old site's imports, left alone
+      const uploaded = r.photos.filter((p) => p.includes("/") && !/^https?:/.test(p));
+      if (uploaded.length) {
+        const { error: e } = await supabase().storage.from("products").remove(uploaded);
+        if (e) console.warn("[admin] photos not removed:", e.message);
+      }
+      toast(r.result === "archived" ? `${name} deleted · past sales still show it` : `${name} deleted`);
+      onDeleted();
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Sheet open={open} onClose={busy ? () => {} : onClose} title="Delete product?">
+      <p className="text-[15px]">
+        <strong>{name}</strong> will be removed from the shop and from your stock list. This can&apos;t be undone.
+      </p>
+      <ul className="mt-3 grid gap-1.5 text-[14px] text-muted">
+        {stock > 0 && <li>Its {stock} item{stock === 1 ? "" : "s"} in stock will be written off.</li>}
+        <li>Past orders and sales keep their details and totals.</li>
+        <li>Its photos are deleted.</li>
+      </ul>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <div className="mt-5 grid gap-2">
+        <button type="button" onClick={remove} disabled={busy} className={`${btn.alert} w-full`}>
+          {busy ? "Deleting…" : "Delete for good"}
+        </button>
+        <button type="button" onClick={onClose} disabled={busy} className={`${btn.line} w-full`} data-autofocus>
+          Keep it
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 export default function ProductPage() {
   return (
     <Suspense fallback={<Loading />}>
@@ -75,13 +123,14 @@ function Editor() {
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError("");
     const sb = supabase();
     const [cats, product, stock] = await Promise.all([
-      sb.from("products").select("category"),
-      id ? sb.from("products").select("*").eq("id", id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      sb.from("products").select("category").is("deleted_at", null),
+      id ? sb.from("products").select("*").eq("id", id).is("deleted_at", null).maybeSingle() : Promise.resolve({ data: null, error: null }),
       id ? sb.from("inventory").select("*").eq("product_id", id).eq("active", true).order("position") : Promise.resolve({ data: [], error: null }),
     ]);
     const err = cats.error || product.error || stock.error;
@@ -234,6 +283,7 @@ function Editor() {
   };
 
   const totalStock = form.sizes.reduce((n, s) => n + s.on_hand, 0);
+  const sizesHeld = form.sizes.reduce((n, s) => n + s.reserved, 0);
 
   return (
     <form onSubmit={save} noValidate className="pb-6">
@@ -417,12 +467,36 @@ function Editor() {
         </div>
       </section>
 
+      {form.id && (
+        <section className="mt-10 border-t border-line pt-5">
+          <h2 className="label mb-1">Delete product</h2>
+          <p className="mb-3 text-xs text-muted">
+            For items you won&apos;t sell again. To take something off the shop for a while, use &ldquo;Hidden from the shop&rdquo; at the top instead.
+          </p>
+          <button type="button" onClick={() => setConfirmDelete(true)} disabled={sizesHeld > 0} className={`${btn.danger} w-full`}>
+            Delete this product
+          </button>
+          {sizesHeld > 0 && <p className="mt-2 text-xs text-muted">{sizesHeld} held by waiting orders. Confirm or cancel those orders first.</p>}
+        </section>
+      )}
+
       {error && <ErrorBox>{error}</ErrorBox>}
       <div className="sticky bottom-[calc(61px+env(safe-area-inset-bottom,0px))] z-30 -mx-4 mt-6 border-t border-fg bg-white px-4 py-3">
         <button type="submit" disabled={saving} className={`${btn.dark} w-full`}>
           {saving ? "Saving…" : form.id ? "Save changes" : "Add product"}
         </button>
       </div>
+
+      {form.id && (
+        <DeleteSheet
+          open={confirmDelete}
+          onClose={() => setConfirmDelete(false)}
+          id={form.id}
+          name={form.name || "this product"}
+          stock={totalStock}
+          onDeleted={() => router.replace("/admin/inventory/")}
+        />
+      )}
     </form>
   );
 }

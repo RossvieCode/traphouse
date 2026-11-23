@@ -420,6 +420,48 @@ test("deleting an admin's login keeps their orders and stock history", async () 
   assert.equal((await as("postgres", `select count(*)::int as n from public.admins where user_id = '${STAFF}'`))[0].n, 0);
 });
 
+/* ── Deleting products ──────────────────────────────────── */
+
+test("deleting a product nobody ordered removes it completely", async () => {
+  const r = await rpc(ADMIN, "save_product", {
+    p: { name: "Test Cap", category: "Accessories", main_photo: "test-cap/a.jpg", extra_photos: ["test-cap/b.jpg"], variants: [{ size: "One Size", on_hand: 3 }] },
+  });
+  await rejects(rpc(STRANGER, "delete_product", { p_id: r.id }), /Only shop admins/);
+  await rejects(rpc("anon", "delete_product", { p_id: r.id }), /permission denied/);
+
+  const d = await rpc(ADMIN, "delete_product", { p_id: r.id });
+  assert.equal(d.result, "removed");
+  assert.deepEqual(d.photos, ["test-cap/a.jpg", "test-cap/b.jpg"]);
+  const left = await as("postgres", "select (select count(*) from public.products where id = $1)::int as p, (select count(*) from public.variants where product_id = $1)::int as v", [r.id]);
+  assert.deepEqual(left, [{ p: 0, v: 0 }]);
+  await rejects(rpc(ADMIN, "delete_product", { p_id: r.id }), /doesn't exist/);
+});
+
+test("deleting a product with sales archives it and keeps the history", async () => {
+  const r = await rpc(ADMIN, "save_product", { p: { name: "Old Hoodie", category: "Hoodies & Jackets", price_rwf: 30000, variants: [{ size: "L", on_hand: 4 }] } });
+  const [{ id: L }] = await as("postgres", "select id from public.variants where product_id = $1", [r.id]);
+
+  const held = await order([{ variant_id: L, qty: 1 }], "0788123123");
+  await rejects(rpc(ADMIN, "delete_product", { p_id: r.id }), /waiting order \(1 held\)/);
+  const [o] = await as(ADMIN, "select id from public.orders where code = $1", [held.code]);
+  await rpc(ADMIN, "confirm_order", { p_order_id: o.id });
+  const before = (await rpc(ADMIN, "admin_stats")).month;
+
+  assert.equal((await rpc(ADMIN, "delete_product", { p_id: r.id })).result, "archived");
+  assert.ok(!(await catalog()).some((p) => p.id === r.id), "gone from the shop");
+  assert.deepEqual(await as(ADMIN, "select * from public.inventory where product_id = $1", [r.id]), [], "gone from the admin stock list");
+  const [v] = await as("postgres", "select on_hand, active from public.variants where id = $1", [L]);
+  assert.deepEqual(v, { on_hand: 0, active: false });
+  const [m] = await as("postgres", "select change, reason, note from public.stock_movements where variant_id = $1 order by id desc limit 1", [L]);
+  assert.deepEqual(m, { change: -3, reason: "adjustment", note: "product deleted" });
+  assert.deepEqual((await rpc(ADMIN, "admin_stats")).month, before, "past sales still count");
+  const [item] = await as(ADMIN, "select product_name from public.order_items where order_id = $1", [o.id]);
+  assert.equal(item.product_name, "Old Hoodie");
+
+  await rejects(as(ADMIN, "update public.products set active = true where id = $1", [r.id]), /was deleted/);
+  await rejects(rpc(ADMIN, "save_product", { p: { id: r.id, name: "Old Hoodie", category: "Hoodies & Jackets", variants: [{ id: L, size: "L", on_hand: 1 }] } }), /was deleted/);
+});
+
 test("dashboard numbers", async () => {
   const s = await rpc(ADMIN, "admin_stats");
   const inv = await as(ADMIN, "select sum(on_hand)::int as on_hand, sum(reserved)::int as reserved from public.inventory");

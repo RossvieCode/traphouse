@@ -250,7 +250,7 @@ function ProductDetail({ p }: { p: Product }) {
             if (why) toast(why);
             else open("cart");
           }}
-          className="mt-7 flex min-h-[52px] w-full items-center justify-center bg-fg px-5 text-sm font-bold tracking-widest text-white uppercase transition hover:bg-[#2a2a2a] active:scale-[0.99] disabled:bg-line disabled:text-muted disabled:active:scale-100"
+          className="mt-7 flex min-h-[52px] w-full items-center justify-center bg-fg px-5 text-sm font-bold tracking-widest text-white uppercase transition hover:bg-fg-hover active:scale-[0.99] disabled:bg-line disabled:text-muted disabled:active:scale-100"
         >
           {soldOut ? "Sold out" : variant ? "Add to cart" : "Choose a size"}
         </button>
