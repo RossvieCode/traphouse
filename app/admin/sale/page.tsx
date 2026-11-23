@@ -21,6 +21,8 @@ export default function RecordSalePage() {
   const [loadError, setLoadError] = useState("");
   const [lines, setLines] = useState<Line[]>([blank()]);
   const [error, setError] = useState("");
+  /** Problems with a single item, by line key; shown inside that item. */
+  const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [formKey, setFormKey] = useState(0);
 
@@ -53,7 +55,16 @@ export default function RecordSalePage() {
   }, [products]);
 
   const get = (id: string) => products?.find((p) => p.id === id);
-  const update = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...patch } : l)));
+  const update = (i: number, patch: Partial<Line>) => {
+    const k = lines[i]?.key;
+    if (k && lineErrors[k])
+      setLineErrors((errs) => {
+        const rest = { ...errs };
+        delete rest[k];
+        return rest;
+      });
+    setLines((ls) => ls.map((l, n) => (n === i ? { ...l, ...patch } : l)));
+  };
 
   const pickProduct = (i: number, id: string) => {
     const p = get(id);
@@ -74,10 +85,22 @@ export default function RecordSalePage() {
     e.preventDefault();
     setError("");
     const filled = lines.filter((l) => l.product);
-    if (!filled.length) return setError("Choose a product.");
-    if (filled.some((l) => !l.variant)) return setError("Choose a size for each item.");
-    if (filled.some((l) => num(l.price) != null && !(Number.isInteger(num(l.price)) && num(l.price)! >= 0)))
-      return setError("Prices must be whole numbers, like 20000.");
+    const problems: Record<string, string> = {};
+    if (!filled.length) problems[lines[0].key] = "Choose a product.";
+    for (const l of filled) {
+      const price = num(l.price);
+      if (!l.variant) problems[l.key] = "Choose a size.";
+      else if (price != null && !(Number.isInteger(price) && price >= 0)) problems[l.key] = "The price must be a whole number, like 20000 (or leave it empty).";
+    }
+    setLineErrors(problems);
+    const first = Object.keys(problems)[0];
+    if (first) {
+      // take them to the first item that needs fixing
+      const box = document.querySelector<HTMLElement>(`[data-line="${first}"]`);
+      box?.scrollIntoView({ block: "center" });
+      box?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus({ preventScroll: true });
+      return;
+    }
     const f = new FormData(e.currentTarget);
     setBusy(true);
     try {
@@ -89,6 +112,7 @@ export default function RecordSalePage() {
       });
       toast(`Sale ${r.code} recorded · ${rwf(r.total_rwf)}`);
       setLines([blank()]);
+      setLineErrors({});
       setFormKey((k) => k + 1);
       load();
     } catch (err) {
@@ -110,8 +134,14 @@ export default function RecordSalePage() {
           const p = get(l.product);
           const v = p?.sizes.find((s) => s.variant_id === l.variant);
           const colourChoice = p && v && !v.colour && p.colours.length > 1;
+          const problem = lineErrors[l.key];
+          const errId = `line-error-${l.key}`;
+          const bad = (field: "product" | "variant" | "price") =>
+            problem && ((field === "product" && !l.product) || (field === "variant" && l.product && !l.variant) || (field === "price" && l.variant))
+              ? { "aria-invalid": true as const, "aria-describedby": errId }
+              : {};
           return (
-            <fieldset key={l.key} className="grid gap-3 border border-fg p-3" data-testid="sale-line">
+            <fieldset key={l.key} data-line={l.key} className={`grid gap-3 border p-3 ${problem ? "border-2 border-alert" : "border-fg"}`} data-testid="sale-line">
               <legend className="label flex w-full items-center justify-between px-1">
                 Item {i + 1}
                 {lines.length > 1 && (
@@ -121,7 +151,7 @@ export default function RecordSalePage() {
                 )}
               </legend>
               <Field label="Product">
-                <select value={l.product} onChange={(e) => pickProduct(i, e.target.value)} className={input}>
+                <select value={l.product} onChange={(e) => pickProduct(i, e.target.value)} className={input} {...bad("product")}>
                   <option value="">Choose…</option>
                   {byCategory.map(([cat, ps]) => (
                     <optgroup key={cat} label={cat}>
@@ -138,7 +168,7 @@ export default function RecordSalePage() {
               {p && (
                 <>
                   <Field label="Size">
-                    <select value={l.variant} onChange={(e) => update(i, { variant: e.target.value, qty: 1, colour: p.sizes.find((s) => s.variant_id === e.target.value)?.colour || l.colour })} className={input}>
+                    <select value={l.variant} onChange={(e) => update(i, { variant: e.target.value, qty: 1, colour: p.sizes.find((s) => s.variant_id === e.target.value)?.colour || l.colour })} className={input} {...bad("variant")}>
                       <option value="">Choose…</option>
                       {p.sizes.map((s) => (
                         <option key={s.variant_id} value={s.variant_id} disabled={s.available <= 0}>
@@ -164,7 +194,7 @@ export default function RecordSalePage() {
                     </div>
                     <div className="min-w-[140px] flex-1">
                       <Field label="Price each (RWF)">
-                        <input value={l.price} onChange={(e) => update(i, { price: e.target.value })} inputMode="numeric" placeholder="On request" className={input} />
+                        <input value={l.price} onChange={(e) => update(i, { price: e.target.value })} inputMode="numeric" placeholder="On request" className={input} {...bad("price")} />
                       </Field>
                     </div>
                   </div>
@@ -172,6 +202,11 @@ export default function RecordSalePage() {
                     <p className="text-xs text-muted">Discount: {rwf((p.price_rwf - num(l.price)!) * l.qty)} off the shop price.</p>
                   )}
                 </>
+              )}
+              {problem && (
+                <p id={errId} className="text-[14px] font-semibold text-alert">
+                  {problem}
+                </p>
               )}
             </fieldset>
           );
@@ -195,7 +230,7 @@ export default function RecordSalePage() {
       </section>
 
       {error && <ErrorBox>{error}</ErrorBox>}
-      <div className="sticky bottom-[calc(61px+env(safe-area-inset-bottom,0px))] z-30 -mx-4 mt-6 border-t border-fg bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-[calc(61px+env(safe-area-inset-bottom,0px))] z-30 -mx-4 mt-6 border-t border-fg bg-white px-4 py-3">
         <p className="mb-2 flex justify-between text-base font-extrabold uppercase">
           <span>Total</span>
           <span className="tabular-nums">{rwf(total)}</span>

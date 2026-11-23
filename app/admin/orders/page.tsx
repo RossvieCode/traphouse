@@ -46,13 +46,12 @@ export default function OrdersPage() {
   return (
     <>
       <PageHead title="Orders" />
-      <div role="tablist" className="mb-4 grid grid-cols-3 border border-fg">
+      <div role="group" aria-label="Show orders" className="mb-4 grid grid-cols-3 border border-fg">
         {(Object.keys(TABS) as Tab[]).map((t) => (
           <button
             key={t}
-            role="tab"
             type="button"
-            aria-selected={tab === t}
+            aria-pressed={tab === t}
             onClick={() => setTab(t)}
             className={`min-h-12 text-[12px] font-bold tracking-widest uppercase ${tab === t ? "bg-fg text-white" : ""}`}
           >

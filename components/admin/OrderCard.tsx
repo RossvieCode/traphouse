@@ -70,7 +70,7 @@ export function OrderCard({ order: o, now, onChanged }: { order: Order; now: num
           </p>
         </div>
         <span
-          className={`shrink-0 px-2 py-1 text-[11px] font-bold tracking-wide uppercase ${
+          className={`shrink-0 px-2 py-1 text-[12px] font-bold tracking-wide uppercase ${
             o.status === "confirmed" ? "bg-fg text-white" : o.status === "cancelled" ? "bg-soft" : left === "Expired" ? "bg-alert text-white" : "border border-fg"
           }`}
         >
@@ -116,7 +116,7 @@ export function OrderCard({ order: o, now, onChanged }: { order: Order; now: num
       {error && <ErrorBox>{error}</ErrorBox>}
       {o.status === "pending" && (
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <button type="button" onClick={cancel} disabled={busy} className={armed ? `${btn.dark} bg-alert hover:bg-alert` : btn.danger}>
+          <button type="button" onClick={cancel} disabled={busy} className={armed ? btn.alert : btn.danger}>
             {armed ? "Tap to cancel" : "Cancel"}
           </button>
           <button type="button" onClick={() => run("confirm_order")} disabled={busy} className={btn.dark}>
@@ -125,7 +125,7 @@ export function OrderCard({ order: o, now, onChanged }: { order: Order; now: num
         </div>
       )}
       {o.status === "confirmed" && (
-        <button type="button" onClick={cancel} disabled={busy} className={`${armed ? `${btn.dark} bg-alert hover:bg-alert` : btn.danger} mt-4 w-full`}>
+        <button type="button" onClick={cancel} disabled={busy} className={`${armed ? btn.alert : btn.danger} mt-4 w-full`}>
           {armed ? "Tap again: cancel & put items back in stock" : "Cancel / return"}
         </button>
       )}

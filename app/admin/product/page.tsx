@@ -37,6 +37,9 @@ type Form = {
 };
 
 const NEW_CATEGORY = "__new__";
+const LEAVE_MESSAGE = "Leave without saving? Your changes to this product will be lost.";
+/** What counts as an unsaved change. Visibility of a saved product is stored the moment it's tapped, so it's left out. */
+const snapshot = (f: Form) => JSON.stringify({ ...f, active: f.id ? null : f.active });
 const SIZE_SUGGESTIONS = ["XS", "S", "M", "L", "XL", "XXL", "One Size", "28", "30", "32", "34", "36"];
 const key = () => Math.random().toString(36).slice(2);
 const emptyForm = (): Form => ({
@@ -65,6 +68,8 @@ function Editor() {
   const { toast } = useAdmin();
 
   const [form, setForm] = useState<Form | null>(id ? null : emptyForm());
+  /** The form as last loaded or saved, to tell whether anything changed. */
+  const [saved, setSaved] = useState("");
   const [categories, setCategories] = useState<string[]>(CATEGORY_ORDER);
   const [newCategory, setNewCategory] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -86,7 +91,7 @@ function Editor() {
     if (!id) return;
     const p = product.data;
     if (!p) return setLoadError("This product doesn't exist (any more).");
-    setForm({
+    const loaded: Form = {
       id: p.id,
       slug: p.slug,
       name: p.name,
@@ -106,12 +111,16 @@ function Editor() {
         reserved: v.reserved,
         sold: v.sold,
       })),
-    });
+    };
+    setForm(loaded);
+    setSaved(snapshot(loaded));
   }, [id]);
 
   useEffect(() => {
     document.title = (id ? "Edit product" : "New product") + " — Shop admin";
-    setForm(id ? null : emptyForm());
+    const fresh = id ? null : emptyForm();
+    setForm(fresh);
+    setSaved(fresh ? snapshot(fresh) : "");
     setNewCategory(false);
     setError("");
     load();
@@ -119,6 +128,32 @@ function Editor() {
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
   const colourNames = useMemo(() => (form?.colours ?? []).map((c) => c.name.trim()).filter(Boolean), [form?.colours]);
+  const dirty = useMemo(() => !!form && !!saved && snapshot(form) !== saved, [form, saved]);
+
+  /* ask before leaving with unsaved changes: links and tabs inside the admin, and closing/reloading the page */
+  useEffect(() => {
+    if (!dirty) return;
+    const onUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+      if (!window.confirm(LEAVE_MESSAGE)) {
+        // capture phase on window runs before Next's link handler, so stopping here keeps them on the form
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("click", onClick, true);
+    };
+  }, [dirty]);
 
   if (loadError) return <ErrorBox onRetry={load}>{loadError}</ErrorBox>;
   if (!form) return <Loading />;
@@ -188,6 +223,7 @@ function Editor() {
         },
       });
       toast("Saved");
+      setSaved(snapshot(form));
       if (!form.id) router.replace(`/admin/product/?id=${r.id}`);
       else await load();
     } catch (err) {
@@ -223,14 +259,14 @@ function Editor() {
         role="switch"
         aria-checked={form.active}
         onClick={toggleActive}
-        className={`mb-5 flex min-h-14 w-full items-center justify-between border px-4 text-left ${form.active ? "border-fg" : "border-alert bg-[#fff5f5]"}`}
+        className={`mb-5 flex min-h-14 w-full items-center justify-between border px-4 text-left ${form.active ? "border-fg" : "border-alert bg-alert-soft"}`}
       >
         <span>
           <span className="block font-semibold">{form.active ? "Visible in the shop" : "Hidden from the shop"}</span>
           <span className="block text-xs text-muted">{form.active ? "Tap to hide it (nothing is deleted)" : "Customers can't see or order it. Tap to show it again."}</span>
         </span>
-        <span aria-hidden="true" className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${form.active ? "bg-fg" : "bg-line"}`}>
-          <span className={`absolute top-1 size-5 rounded-full bg-white transition-all ${form.active ? "left-6" : "left-1"}`} />
+        <span aria-hidden="true" className={`relative h-7 w-12 shrink-0 border border-fg transition-colors ${form.active ? "bg-fg" : "bg-white"}`}>
+          <span className={`absolute top-[3px] size-5 transition-[left] duration-200 ease-out ${form.active ? "left-[23px] bg-white" : "left-[3px] bg-fg"}`} />
         </span>
       </button>
 
@@ -274,7 +310,7 @@ function Editor() {
         <div className="flex flex-wrap items-start gap-3">
           <div>
             <PhotoPicker value={form.main_photo} onChange={(p) => set("main_photo", p)} productName={form.name} label="Main photo" />
-            <p className="mt-1 text-[11px] font-bold tracking-wide text-muted uppercase">Main</p>
+            <p className="label mt-1 text-muted">Main</p>
           </div>
           {form.extra_photos.map((p, i) => (
             <PhotoPicker
@@ -382,7 +418,7 @@ function Editor() {
       </section>
 
       {error && <ErrorBox>{error}</ErrorBox>}
-      <div className="sticky bottom-[calc(61px+env(safe-area-inset-bottom,0px))] z-30 -mx-4 mt-6 border-t border-fg bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-[calc(61px+env(safe-area-inset-bottom,0px))] z-30 -mx-4 mt-6 border-t border-fg bg-white px-4 py-3">
         <button type="submit" disabled={saving} className={`${btn.dark} w-full`}>
           {saving ? "Saving…" : form.id ? "Save changes" : "Add product"}
         </button>

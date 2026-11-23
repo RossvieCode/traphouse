@@ -91,7 +91,7 @@ export default function SalesPage() {
               type="button"
               onClick={() => setRange(r)}
               aria-pressed={on}
-              className={`min-h-11 shrink-0 rounded-full border border-fg px-4 text-xs font-semibold tracking-[0.06em] whitespace-nowrap uppercase ${on ? "bg-fg text-white" : ""}`}
+              className={`min-h-11 shrink-0 border border-fg px-4 text-xs font-bold tracking-[0.06em] whitespace-nowrap uppercase ${on ? "bg-fg text-white" : "hover:bg-soft"}`}
             >
               {label}
             </button>
@@ -118,7 +118,7 @@ export default function SalesPage() {
               ["Revenue", rwf(revenue)],
             ].map(([l, v]) => (
               <div key={l} className="border-r border-line p-2.5 last:border-r-0">
-                <p className="label text-[10px] text-muted">{l}</p>
+                <p className="label text-muted">{l}</p>
                 <p className="mt-0.5 text-[15px] font-extrabold tabular-nums">{v}</p>
               </div>
             ))}

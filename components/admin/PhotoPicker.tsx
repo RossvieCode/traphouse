@@ -79,7 +79,7 @@ export default function PhotoPicker({
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={!!busy}
-            className="grid size-full place-items-center px-1 text-center text-[11px] font-bold tracking-wide uppercase"
+            className="grid size-full place-items-center px-1 text-center text-[12px] leading-tight font-bold uppercase"
           >
             {busy ? `Uploading ${busy}` : <>+ {label}</>}
           </button>
@@ -89,8 +89,9 @@ export default function PhotoPicker({
             <button
               type="button"
               onClick={() => onChange("")}
+              disabled={!!busy}
               aria-label={`Remove ${label}`}
-              className="absolute -top-px -right-px grid size-9 place-items-center bg-fg text-white"
+              className="absolute -top-px -right-px grid size-9 place-items-center bg-fg text-white disabled:opacity-40"
             >
               <CloseIcon size={14} />
             </button>
@@ -98,7 +99,8 @@ export default function PhotoPicker({
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={!!busy}
-              className="absolute inset-x-0 bottom-0 min-h-9 bg-white/90 text-[10px] font-bold tracking-wide uppercase"
+              aria-label={busy ? undefined : `Replace ${label}`}
+              className="absolute inset-x-0 bottom-0 min-h-9 bg-white/90 text-[12px] font-bold uppercase"
             >
               {busy ? `Uploading ${busy}` : "Replace"}
             </button>

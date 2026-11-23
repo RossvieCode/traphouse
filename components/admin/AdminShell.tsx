@@ -138,7 +138,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   return (
     <AdminCtx.Provider value={value}>
       <div className="min-h-dvh bg-white pb-[calc(76px+env(safe-area-inset-bottom,0px))]">
-        <header className="sticky top-0 z-40 flex h-[calc(56px+env(safe-area-inset-top,0px))] items-center justify-between border-b border-fg bg-white/95 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur">
+        <header className="sticky top-0 z-40 flex h-[calc(56px+env(safe-area-inset-top,0px))] items-center justify-between border-b border-fg bg-white px-4 pt-[env(safe-area-inset-top,0px)]">
           <Link href="/admin/" className="flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={asset("logo.png")} alt="" width={36} height={36} />
@@ -163,11 +163,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 key={t.href}
                 href={t.href}
                 aria-current={on ? "page" : undefined}
-                className={`relative grid h-[60px] place-items-center text-[11px] font-bold tracking-[0.08em] uppercase ${on ? "bg-fg text-white" : "text-fg"}`}
+                className={`relative grid h-[60px] place-items-center text-[12px] font-bold tracking-[0.06em] uppercase ${on ? "bg-fg text-white" : "text-fg"}`}
               >
                 {t.label}
                 {t.label === "Orders" && pending > 0 && (
-                  <span className={`absolute top-2 right-[calc(50%-30px)] grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10px] ${on ? "bg-white text-fg" : "bg-fg text-white"}`}>
+                  <span className={`absolute top-1.5 right-[calc(50%-34px)] grid h-5 min-w-5 place-items-center rounded-full px-1 text-[12px] leading-none tracking-normal ${on ? "bg-white text-fg" : "bg-fg text-white"}`}>
                     <span className="sr-only">, waiting: </span>
                     {pending}
                   </span>
@@ -179,7 +179,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div
           role="status"
           aria-live="polite"
-          className={`pointer-events-none fixed bottom-[calc(84px+env(safe-area-inset-bottom,0px))] left-1/2 z-90 max-w-[90vw] -translate-x-1/2 bg-fg px-4.5 py-3 text-center text-[13px] font-semibold text-white transition-all duration-300 ${message ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"}`}
+          className={`pointer-events-none fixed top-[calc(64px+env(safe-area-inset-top,0px))] left-1/2 z-90 max-w-[90vw] -translate-x-1/2 bg-fg px-4.5 py-3 text-center text-[14px] font-semibold text-white transition-[opacity,translate] duration-300 ease-out-expo ${message ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0"}`}
         >
           {message}
         </div>

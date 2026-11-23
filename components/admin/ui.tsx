@@ -7,9 +7,11 @@ import { CloseIcon } from "../icons";
 
 const BASE = "inline-flex min-h-12 items-center justify-center gap-2 px-4 text-[13px] font-bold tracking-widest uppercase transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40";
 export const btn = {
-  dark: `${BASE} bg-fg text-white hover:bg-[#2a2a2a]`,
+  dark: `${BASE} bg-fg text-white hover:bg-fg-hover`,
   line: `${BASE} border border-fg bg-white hover:bg-soft`,
-  danger: `${BASE} border border-alert bg-white text-alert hover:bg-[#fff5f5]`,
+  danger: `${BASE} border border-alert bg-white text-alert hover:bg-alert-soft`,
+  /** Armed destructive action: the second tap will do it. */
+  alert: `${BASE} border border-alert bg-alert text-white`,
 };
 export const input =
   "min-h-12 w-full min-w-0 border border-fg bg-white px-3.5 text-base outline-none focus:border-2 focus:px-[13px] disabled:border-line disabled:text-muted";
@@ -100,6 +102,8 @@ export function Stepper({
   );
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /** Panel that slides up from the bottom (phone) / centred box (desktop). */
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -111,7 +115,23 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
     if (!open) return;
     const last = document.activeElement as HTMLElement | null;
     setTimeout(() => ref.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus(), 50);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return closeRef.current();
+      if (e.key !== "Tab" || !ref.current) return;
+      // keep keyboard focus inside the panel
+      const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const inside = ref.current.contains(document.activeElement);
+      if (e.shiftKey && (document.activeElement === first || !inside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !inside)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
     document.body.classList.add("overflow-hidden");
     return () => {
@@ -147,7 +167,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
 export function Figure({ label, value, strong }: { label: string; value: React.ReactNode; strong?: boolean }) {
   return (
     <div className="border border-line p-3">
-      <p className="label text-[11px] text-muted">{label}</p>
+      <p className="label text-muted">{label}</p>
       <p className={`mt-1 tabular-nums ${strong ? "text-[26px] font-extrabold" : "text-[20px] font-bold"}`}>{value}</p>
     </div>
   );

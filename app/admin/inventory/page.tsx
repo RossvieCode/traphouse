@@ -18,6 +18,9 @@ const FILTERS = {
 } as const;
 type Filter = keyof typeof FILTERS;
 
+/** Product column + four number columns, shared by the heads and every row. */
+const COLS = "grid grid-cols-[minmax(0,1fr)_repeat(4,2.75rem)] gap-1";
+
 export default function InventoryPage() {
   const [rows, setRows] = useState<InventoryRow[] | null>(null);
   const [error, setError] = useState("");
@@ -84,40 +87,51 @@ export default function InventoryPage() {
       {error && <ErrorBox onRetry={load}>{error}</ErrorBox>}
       {!rows && !error && <Loading />}
       {rows && (
-        <div className="mt-4" role="table" aria-label="Stock">
-          <div role="row" className="sticky top-[calc(56px+env(safe-area-inset-top,0px))] z-10 grid grid-cols-[1fr_repeat(4,42px)] items-end gap-1 border-b border-fg bg-white py-2 text-right text-[10px] font-bold tracking-[0.06em] uppercase">
-            <span role="columnheader" className="text-left">Product</span>
-            <span role="columnheader">On hand</span>
-            <span role="columnheader">Held</span>
-            <span role="columnheader">Avail.</span>
-            <span role="columnheader">Sold</span>
+        <div className="mt-4">
+          {/* visual column heads; each row button carries its own spoken summary */}
+          <div aria-hidden="true" className={`${COLS} sticky top-[calc(56px+env(safe-area-inset-top,0px))] z-10 items-end border-b border-fg bg-white py-2 text-right text-[12px] leading-tight font-semibold text-muted`}>
+            <span className="text-left">Product</span>
+            <span>On hand</span>
+            <span>Held</span>
+            <span className="text-fg">Avail.</span>
+            <span>Sold</span>
           </div>
           {shown.length === 0 && <p className="py-8 text-center text-muted">Nothing matches.</p>}
-          {shown.map((r) => (
-            <button
-              key={r.variant_id}
-              type="button"
-              role="row"
-              onClick={() => setOpen(r)}
-              className="grid min-h-16 w-full grid-cols-[1fr_repeat(4,42px)] items-center gap-1 border-b border-line py-2 text-right tabular-nums hover:bg-soft"
-            >
-              <span role="cell" className="min-w-0 text-left">
-                <span className="block truncate text-[14px] font-semibold">
-                  {r.name}
-                  {!r.product_active && <span className="ml-1.5 bg-soft px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-muted uppercase">Hidden</span>}
-                </span>
-                <span className="block truncate text-[12px] text-muted">
-                  {[sizeLabel(r), rwf(r.price_rwf)].filter(Boolean).join(" · ")}
-                </span>
-              </span>
-              <span role="cell" className="text-[15px]">{r.on_hand}</span>
-              <span role="cell" className={`text-[15px] ${r.reserved ? "" : "text-line"}`}>{r.reserved}</span>
-              <span role="cell" className={`text-[15px] font-bold ${r.available === 0 ? "text-alert" : r.available <= 2 ? "underline decoration-2 underline-offset-4" : ""}`}>
-                {r.available}
-              </span>
-              <span role="cell" className="text-[15px] text-muted">{r.sold}</span>
-            </button>
-          ))}
+          <ul aria-label="Stock">
+            {shown.map((r) => (
+              <li key={r.variant_id} className="border-b border-line">
+                <button
+                  type="button"
+                  onClick={() => setOpen(r)}
+                  aria-label={[
+                    r.name,
+                    sizeLabel(r),
+                    !r.product_active && "hidden from the shop",
+                    `${r.on_hand} on hand, ${r.reserved} held, ${r.available} available, ${r.sold} sold`,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                  className={`${COLS} min-h-16 w-full items-center py-2 text-right tabular-nums hover:bg-soft`}
+                >
+                  <span className="min-w-0 text-left">
+                    <span className="line-clamp-2 text-[14px] leading-snug font-semibold">
+                      {r.name}
+                      {!r.product_active && <span className="ml-1.5 bg-soft px-1.5 py-0.5 text-[12px] font-bold text-muted uppercase">Hidden</span>}
+                    </span>
+                    <span className="block truncate text-[12px] text-muted">
+                      {[sizeLabel(r), rwf(r.price_rwf)].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                  <span className="text-[15px]">{r.on_hand}</span>
+                  <span className={`text-[15px] ${r.reserved ? "" : "text-muted"}`}>{r.reserved}</span>
+                  <span className={`text-[15px] font-bold ${r.available === 0 ? "text-alert" : r.available <= 2 ? "underline decoration-2 underline-offset-4" : ""}`}>
+                    {r.available}
+                  </span>
+                  <span className="text-[15px] text-muted">{r.sold}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

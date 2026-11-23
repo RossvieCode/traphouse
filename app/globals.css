@@ -7,6 +7,8 @@
   --color-line: #e6e6e6;
   --color-soft: #f4f4f4;
   --color-alert: #b00000;
+  --color-alert-soft: #fff5f5;
+  --color-fg-hover: #2a2a2a;
   --font-sans: var(--font-archivo), "Helvetica Neue", Arial, sans-serif;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --breakpoint-lg: 960px;
